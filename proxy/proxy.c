@@ -79,20 +79,21 @@ void normal_termination () {
 int main () {
     // register SIGINT handler
     if (signal(SIGINT, sigint_handler) == SIG_ERR) {
-        perror("failed to register signal handler\n");
+        perror("failed to register signal handler");
         return -1;
     }
 
     // register atexit
-    if (!atexit(normal_termination)) {
-        perror("failed to register atexit\n");
+    if (atexit(normal_termination)) {
+        perror("failed to register atexit");
         return -1;
     }
 
+    // create udp socket for listening gzserver messages
     // AF_INET: IPv4 Internet protocols
     // SOCK_DGRAM: Supports datagrams (UDP)
     if ((listen_gzserver_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("failed to create socket\n");
+        perror("failed to create socket");
         return -1;
     }
     struct sockaddr_in listen_gzserver_addr = {0};
@@ -101,23 +102,51 @@ int main () {
     listen_gzserver_addr.sin_addr.s_addr = INADDR_ANY;
     if (bind(listen_gzserver_fd, (struct sockaddr *)&listen_gzserver_addr,
              sizeof(listen_gzserver_addr)) < 0) {
-        perror("failed to bind address\n");
-        close(listen_gzserver_fd);
+        perror("failed to bind address");
         return -1;
     }
-
     printf("create udp port at %d\n", LISTEN_GZSERRVER_PORT);
 
+    // TODO: create socketr for listening arducopter messages
+
     struct fdmPacket fdm;
-    while (1) {
-        int ret = recv(listen_gzserver_fd, &fdm, sizeof(fdm), 0);
-        if (ret < 0) {
-            perror("failed to receive fdm packet\n");
-            break;
+
+    // initialize select data
+    int nfds = 0, ret;
+    fd_set rfds, active_rfds;
+    FD_ZERO(&active_rfds);
+    FD_SET(0, &active_rfds); nfds = 1;
+    FD_SET(listen_gzserver_fd, &active_rfds);
+    nfds = nfds > listen_gzserver_fd + 1 ? nfds : listen_gzserver_fd + 1;
+    struct timeval timeout = {.tv_sec = 1, .tv_usec = 0};
+    rfds = active_rfds;
+    while ((ret = select(nfds, &rfds, NULL, NULL, &timeout)) >= 0) {
+        // stdin
+        if (FD_ISSET(0, &rfds)) {
+            char buffer[256] = {0};
+            read(0, buffer, 255);
+            printf("read: %s\n", buffer);
+            printf("hello\n");
         }
-        show_fdm(&fdm);
+
+        // receive message from gzserver
+        if (FD_ISSET(listen_gzserver_fd, &rfds)) {
+            int rstatus = recv(listen_gzserver_fd, &fdm, sizeof(fdm), 0);
+            if (rstatus < 0) {
+                perror("failed to receive message from gzserver");
+                return -1;
+            }
+            show_fdm(&fdm);
+            // TODO: send message to arducopter
+        }
+
+        // reset rfds
+        rfds = active_rfds;
     }
 
-    close(listen_gzserver_fd);
+    if (ret < 0) {
+        perror("select fails");
+        return -1;
+    }
     return 0;
 }
