@@ -6,8 +6,10 @@
 #include <netinet/in.h>
 #include <signal.h>
 #include <sys/select.h>
+#include <arpa/inet.h>
 
 #define LISTEN_GZSERRVER_PORT 9003
+#define GZSERRVER_PORT 9002
 
 #define MAX_MOTORS 255
 // A servo packet. for gazebo
@@ -63,17 +65,21 @@ static void show_fdm (const struct fdmPacket *fdm) {
     printf("\n");
 }
 
-int listen_gzserver_fd = 0;
+int listen_gzserver_fd = 0, gzserver_fd = 0;
 void sigint_handler (int signum) {
     printf("bye\n");
     if (listen_gzserver_fd > 0)
         close(listen_gzserver_fd);
+    if (gzserver_fd > 0)
+        close(gzserver_fd);
     exit(0);
 }
 
 void normal_termination () {
     if (listen_gzserver_fd > 0)
         close(listen_gzserver_fd);
+    if (gzserver_fd > 0)
+        close(gzserver_fd);
 }
 
 int main () {
@@ -107,9 +113,21 @@ int main () {
     }
     printf("create udp port at %d\n", LISTEN_GZSERRVER_PORT);
 
+    // create fd to send message to gzserver
+    if ((gzserver_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("failed to create socket");
+        return -1;
+    }
+    struct sockaddr_in gzserver_addr = {0};
+    gzserver_addr.sin_family = AF_INET;
+    gzserver_addr.sin_port = htons(GZSERRVER_PORT); // big-endian
+    gzserver_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+
     // TODO: create socketr for listening arducopter messages
 
     struct fdmPacket fdm;
+    struct ServoPacket sp = {0};
 
     // initialize select data
     int nfds = 0, ret;
@@ -137,7 +155,8 @@ int main () {
                 return -1;
             }
             show_fdm(&fdm);
-            // TODO: send message to arducopter
+            sendto(gzserver_fd, &sp, 64, 0, (struct sockaddr *)&gzserver_addr,
+                   sizeof(gzserver_addr));
         }
 
         // reset rfds
