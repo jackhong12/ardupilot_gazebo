@@ -8,8 +8,8 @@
 #include <sys/select.h>
 #include <arpa/inet.h>
 
-#define LISTEN_GZSERRVER_PORT 9003
-#define GZSERRVER_PORT 9002
+#define LISTEN_GZSERRVER_PORT 9006
+#define GZSERRVER_PORT 9007
 
 #define MAX_MOTORS 255
 // A servo packet. for gazebo
@@ -122,6 +122,7 @@ int main () {
     gzserver_addr.sin_family = AF_INET;
     gzserver_addr.sin_port = htons(GZSERRVER_PORT); // big-endian
     gzserver_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    printf("create a fd for sending messge to prot %d\n", GZSERRVER_PORT);
 
 
     // TODO: create socketr for listening arducopter messages
