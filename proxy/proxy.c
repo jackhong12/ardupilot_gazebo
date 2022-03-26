@@ -9,6 +9,13 @@
 
 #define LISTEN_GZSERRVER_PORT 9003
 
+#define MAX_MOTORS 255
+// A servo packet. for gazebo
+struct ServoPacket {
+    /// \brief Motor speed data.
+    float motorSpeed[MAX_MOTORS];
+};
+
 // Flight Dynamics Model packet that is sent back to the ArduPilot
 struct fdmPacket {
     // \brief packet timestamp
