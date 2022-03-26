@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <signal.h>
+#include <sys/select.h>
 
 #define LISTEN_GZSERRVER_PORT 9003
 
@@ -63,6 +64,11 @@ void sigint_handler (int signum) {
     exit(0);
 }
 
+void normal_termination () {
+    if (listen_gzserver_fd > 0)
+        close(listen_gzserver_fd);
+}
+
 int main () {
     // register SIGINT handler
     if (signal(SIGINT, sigint_handler) == SIG_ERR) {
@@ -70,9 +76,14 @@ int main () {
         return -1;
     }
 
+    // register atexit
+    if (!atexit(normal_termination)) {
+        perror("failed to register atexit\n");
+        return -1;
+    }
+
     // AF_INET: IPv4 Internet protocols
     // SOCK_DGRAM: Supports datagrams (UDP)
-    ;
     if ((listen_gzserver_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("failed to create socket\n");
         return -1;
