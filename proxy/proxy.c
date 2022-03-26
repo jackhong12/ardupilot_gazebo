@@ -8,8 +8,10 @@
 #include <sys/select.h>
 #include <arpa/inet.h>
 
-#define LISTEN_GZSERRVER_PORT 9006
-#define GZSERRVER_PORT 9007
+#define LISTEN_GZSERVER_PORT 9006
+#define GZSERVER_PORT 9007
+#define LISTEN_COPTER_PORT 9002
+#define COPTER_PORT 9003
 
 #define MAX_MOTORS 255
 // A servo packet. for gazebo
@@ -66,12 +68,17 @@ static void show_fdm (const struct fdmPacket *fdm) {
 }
 
 int listen_gzserver_fd = 0, gzserver_fd = 0;
+int listen_copter_fd = 0, copter_fd = 0;
 void sigint_handler (int signum) {
     printf("bye\n");
     if (listen_gzserver_fd > 0)
         close(listen_gzserver_fd);
     if (gzserver_fd > 0)
         close(gzserver_fd);
+    if (listen_copter_fd > 0)
+        close(listen_copter_fd);
+    if (copter_fd > 0)
+        close(copter_fd);
     exit(0);
 }
 
@@ -80,6 +87,10 @@ void normal_termination () {
         close(listen_gzserver_fd);
     if (gzserver_fd > 0)
         close(gzserver_fd);
+    if (listen_copter_fd > 0)
+        close(listen_copter_fd);
+    if (copter_fd > 0)
+        close(copter_fd);
 }
 
 int main () {
@@ -104,14 +115,30 @@ int main () {
     }
     struct sockaddr_in listen_gzserver_addr = {0};
     listen_gzserver_addr.sin_family = AF_INET;
-    listen_gzserver_addr.sin_port = htons(LISTEN_GZSERRVER_PORT); // big-endian
+    listen_gzserver_addr.sin_port = htons(LISTEN_GZSERVER_PORT); // big-endian
     listen_gzserver_addr.sin_addr.s_addr = INADDR_ANY;
     if (bind(listen_gzserver_fd, (struct sockaddr *)&listen_gzserver_addr,
              sizeof(listen_gzserver_addr)) < 0) {
         perror("failed to bind address");
         return -1;
     }
-    printf("create udp port at %d\n", LISTEN_GZSERRVER_PORT);
+    printf("create udp port at %d\n", LISTEN_GZSERVER_PORT);
+
+    // create udp socket for listening copter messages
+    if ((listen_copter_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("failed to create socket");
+        return -1;
+    }
+    struct sockaddr_in listen_copter_addr = {0};
+    listen_copter_addr.sin_family = AF_INET;
+    listen_copter_addr.sin_port = htons(LISTEN_COPTER_PORT); // big-endian
+    listen_copter_addr.sin_addr.s_addr = INADDR_ANY;
+    if (bind(listen_copter_fd, (struct sockaddr *)&listen_copter_addr,
+             sizeof(listen_copter_addr)) < 0) {
+        perror("failed to bind address");
+        return -1;
+    }
+    printf("create udp port at %d\n", LISTEN_COPTER_PORT);
 
     // create fd to send message to gzserver
     if ((gzserver_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -120,9 +147,20 @@ int main () {
     }
     struct sockaddr_in gzserver_addr = {0};
     gzserver_addr.sin_family = AF_INET;
-    gzserver_addr.sin_port = htons(GZSERRVER_PORT); // big-endian
+    gzserver_addr.sin_port = htons(GZSERVER_PORT); // big-endian
     gzserver_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    printf("create a fd for sending messge to prot %d\n", GZSERRVER_PORT);
+    printf("create a fd for sending messge to prot %d\n", GZSERVER_PORT);
+
+    // create fd to send message to copter
+    if ((copter_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("failed to create socket");
+        return -1;
+    }
+    struct sockaddr_in copter_addr = {0};
+    copter_addr.sin_family = AF_INET;
+    copter_addr.sin_port = htons(COPTER_PORT); // big-endian
+    copter_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    printf("create a fd for sending messge to prot %d\n", COPTER_PORT);
 
 
     // TODO: create socketr for listening arducopter messages
@@ -137,6 +175,8 @@ int main () {
     FD_SET(0, &active_rfds); nfds = 1;
     FD_SET(listen_gzserver_fd, &active_rfds);
     nfds = nfds > listen_gzserver_fd + 1 ? nfds : listen_gzserver_fd + 1;
+    FD_SET(listen_copter_fd, &active_rfds);
+    nfds = nfds > listen_copter_fd + 1 ? nfds : listen_copter_fd + 1;
     struct timeval timeout = {.tv_sec = 1, .tv_usec = 0};
     rfds = active_rfds;
     while ((ret = select(nfds, &rfds, NULL, NULL, &timeout)) >= 0) {
@@ -150,13 +190,27 @@ int main () {
 
         // receive message from gzserver
         if (FD_ISSET(listen_gzserver_fd, &rfds)) {
+            // FIX: return value
             int rstatus = recv(listen_gzserver_fd, &fdm, sizeof(fdm), 0);
             if (rstatus < 0) {
                 perror("failed to receive message from gzserver");
                 return -1;
             }
-            show_fdm(&fdm);
-            sendto(gzserver_fd, &sp, 64, 0, (struct sockaddr *)&gzserver_addr,
+            // TODO: spoof data
+            // Send message to copter.
+            sendto(copter_fd, &fdm, sizeof(fdm), 0,
+                   (struct sockaddr *)&copter_addr, sizeof(copter_addr));
+        }
+
+        // receive message from copter
+        if (FD_ISSET(listen_copter_fd, &rfds)) {
+            int size = recv(listen_copter_fd, &sp, sizeof(fdm), 0);
+            if (size < 0) {
+                perror("failed to receive message from copter");
+                return -1;
+            }
+            // Send message to gzserver directly. We don't need to modify packet here.
+            sendto(gzserver_fd, &sp, size, 0, (struct sockaddr *)&gzserver_addr,
                    sizeof(gzserver_addr));
         }
 
