@@ -304,6 +304,19 @@ static int set_cmd (char **args) {
     return 0;
 }
 
+static int clear_cmd (char **args) {
+    if (!args[2])
+        return -1;
+    int offset = find_var(args[2]);
+    if (offset < 0) {
+        fprintf(stderr, "[ERROR] no variable %s\n", args[2]);
+        return -1;
+    }
+
+    spoof_meta_array[offset].spoof_type = spoof_none;
+    return 0;
+}
+
 static void showVar_cmd () {
     for (int i = 0; i < get_spoof_array_size(); i++) {
         if (i)
@@ -323,6 +336,12 @@ void parse_cmd (char *cmd) {
         if (set_cmd(args)) {
             fprintf(stderr, "[ERROR] the format of command is wrong\n");
             fprintf(stderr, "    set <variable> <value>\n");
+        }
+    }
+    else if (!strcmp(args[1], "clear")) {
+        if (clear_cmd(args)) {
+            fprintf(stderr, "[ERROR] the format of command is wrong\n");
+            fprintf(stderr, "    clear <variable>\n");
         }
     }
     else if (!strcmp(args[1], "showVar")) {
