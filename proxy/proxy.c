@@ -407,6 +407,14 @@ int main (int argc, char *argv[]) {
                 return -1;
             }
         }
+        else if (!strcmp(argv[i], "-h")) {
+            printf("proxy\n");
+            printf("    -h:   show all options\n");
+            printf("    -tty: redirect output to another file\n");
+            printf("          -tty <tty device>\n");
+
+            return -1;
+        }
     }
 
     srand(time(NULL));
