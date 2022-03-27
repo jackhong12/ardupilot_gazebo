@@ -20,6 +20,8 @@
 #define COPTER_PORT 9003
 
 #define MAX_MOTORS 255
+#define get_spoof_array_size() \
+    (sizeof(spoof_meta_array) / sizeof(struct SpoofMeta))
 
 const char *cmd_prefix = "> ";
 
@@ -275,7 +277,7 @@ static inline void release_args (char **args) {
 }
 
 static int find_var (char *name) {
-    int num = sizeof(spoof_meta_array) / sizeof(struct SpoofMeta);
+    int num = get_spoof_array_size();
 
     for (int i = 0; i < num; i++)
         if (!strcmp(name, spoof_meta_array[i].name))
@@ -302,6 +304,15 @@ static int set_cmd (char **args) {
     return 0;
 }
 
+static void showVar_cmd () {
+    for (int i = 0; i < get_spoof_array_size(); i++) {
+        if (i)
+            printf(", ");
+        printf("%s", spoof_meta_array[i].name);
+    }
+    printf("\n");
+}
+
 void parse_cmd (char *cmd) {
     char **args = init_args(cmd);
     // empty command
@@ -313,6 +324,9 @@ void parse_cmd (char *cmd) {
             fprintf(stderr, "[ERROR] the format of command is wrong\n");
             fprintf(stderr, "    set <variable> <value>\n");
         }
+    }
+    else if (!strcmp(args[1], "showVar")) {
+        showVar_cmd();
     }
     else {
         fprintf(stderr, "[ERROR] unknown command\n");
@@ -437,7 +451,7 @@ int main (int argc, char *argv[]) {
                 return -1;
             }
             // TODO: spoof data
-            int num = sizeof(spoof_meta_array) / sizeof(struct SpoofMeta);
+            int num = get_spoof_array_size();
             double *ptr = (double *)&fdm;
             for (int i = 0; i < num; i++) {
                 int type = spoof_meta_array[i].spoof_type;
