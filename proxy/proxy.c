@@ -351,6 +351,17 @@ static void showVar_cmd () {
     printf("\n");
 }
 
+const char *help_cmd_msg =
+    "    help\n"
+    "    showVar\n"
+    "    set <variable> <value>\n"
+    "    clear <variable>\n"
+    "    random <variable> <value>\n";
+
+static void help_cmd () {
+    printf("%s", help_cmd_msg);
+}
+
 void parse_cmd (char *cmd) {
     char **args = init_args(cmd);
     // empty command
@@ -377,6 +388,9 @@ void parse_cmd (char *cmd) {
     }
     else if (!strcmp(args[1], "showVar")) {
         showVar_cmd();
+    }
+    else if (!strcmp(args[1], "help")) {
+        help_cmd();
     }
     else {
         fprintf(stderr, "[ERROR] unknown command\n");
