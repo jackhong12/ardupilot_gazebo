@@ -10,6 +10,8 @@
 #include <sys/select.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define LISTEN_GZSERVER_PORT 9006
 #define GZSERVER_PORT 9007
@@ -159,34 +161,35 @@ struct SpoofMeta spoof_meta_array[] = {
     },
 };
 
-static void show_fdm (const struct fdmPacket *fdm) {
-    printf("timestamp: %f\n", fdm->timestamp);
-    printf("imuAngularVelocityRPY: %f, %f, %f\n",
-           fdm->imuAngularVelocityRPY[0],
-           fdm->imuAngularVelocityRPY[1],
-           fdm->imuAngularVelocityRPY[2]);
-    printf("imuLinearAccelerationXYZ: %f, %f, %f\n",
-           fdm->imuLinearAccelerationXYZ[0],
-           fdm->imuLinearAccelerationXYZ[1],
-           fdm->imuLinearAccelerationXYZ[2]);
-    printf("imuOrientationQuat: %f, %f, %f, %f\n",
-           fdm->imuOrientationQuat[0],
-           fdm->imuOrientationQuat[1],
-           fdm->imuOrientationQuat[2],
-           fdm->imuOrientationQuat[3]);
-    printf("velocityXYZ: %f, %f, %f\n",
-           fdm->velocityXYZ[0],
-           fdm->velocityXYZ[1],
-           fdm->velocityXYZ[2]);
-    printf("positionXYZ: %f, %f, %f\n",
-           fdm->positionXYZ[0],
-           fdm->positionXYZ[1],
-           fdm->positionXYZ[2]);
-    printf("\n");
+static void show_fdm (const struct fdmPacket *fdm, int fd) {
+    dprintf(fd, "timestamp: %f\n", fdm->timestamp);
+    dprintf(fd, "imuAngularVelocityRPY: %f, %f, %f\n",
+            fdm->imuAngularVelocityRPY[0],
+            fdm->imuAngularVelocityRPY[1],
+            fdm->imuAngularVelocityRPY[2]);
+    dprintf(fd, "imuLinearAccelerationXYZ: %f, %f, %f\n",
+            fdm->imuLinearAccelerationXYZ[0],
+            fdm->imuLinearAccelerationXYZ[1],
+            fdm->imuLinearAccelerationXYZ[2]);
+    dprintf(fd, "imuOrientationQuat: %f, %f, %f, %f\n",
+            fdm->imuOrientationQuat[0],
+            fdm->imuOrientationQuat[1],
+            fdm->imuOrientationQuat[2],
+            fdm->imuOrientationQuat[3]);
+    dprintf(fd, "velocityXYZ: %f, %f, %f\n",
+            fdm->velocityXYZ[0],
+            fdm->velocityXYZ[1],
+            fdm->velocityXYZ[2]);
+    dprintf(fd, "positionXYZ: %f, %f, %f\n",
+            fdm->positionXYZ[0],
+            fdm->positionXYZ[1],
+            fdm->positionXYZ[2]);
+    dprintf(fd, "\n");
 }
 
 int listen_gzserver_fd = 0, gzserver_fd = 0;
 int listen_copter_fd = 0, copter_fd = 0;
+int redirect_fd = 0;
 void sigint_handler (int signum) {
     printf("bye\n");
     if (listen_gzserver_fd > 0)
@@ -197,6 +200,8 @@ void sigint_handler (int signum) {
         close(listen_copter_fd);
     if (copter_fd > 0)
         close(copter_fd);
+    if (redirect_fd > 0)
+        close(redirect_fd);
     exit(0);
 }
 
@@ -209,6 +214,8 @@ void normal_termination () {
         close(listen_copter_fd);
     if (copter_fd > 0)
         close(copter_fd);
+    if (redirect_fd > 0)
+        close(redirect_fd);
 }
 
 static char **init_args (char *msg) {
@@ -294,7 +301,16 @@ void parse_cmd (char *cmd) {
     return;
 }
 
-int main () {
+int main (int argc, char *argv[]) {
+    for (int i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "-tty") && i < argc - 1) {
+            if ((redirect_fd = open(argv[i + 1], O_WRONLY)) < 0) {
+                perror("failed to open file\n");
+                return -1;
+            }
+        }
+    }
+
     srand(time(NULL));
     // register SIGINT handler
     if (signal(SIGINT, sigint_handler) == SIG_ERR) {
@@ -408,6 +424,9 @@ int main () {
                 if (type == spoof_set)
                     ptr[i] = spoof_meta_array[i].value;
             }
+
+            if (redirect_fd > 0)
+                show_fdm(&fdm, redirect_fd);
 
             // Send message to copter.
             sendto(copter_fd, &fdm, sizeof(fdm), 0,
