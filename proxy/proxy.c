@@ -304,6 +304,31 @@ static int set_cmd (char **args) {
     return 0;
 }
 
+static double grandom (double range) {
+    const int scalar = 1000;
+    int value = rand() % (scalar * 2 + 1);
+
+    return range * (value - scalar) / scalar;
+}
+
+static int random_cmd (char **args) {
+    if (!args[2] || !args[3])
+        return -1;
+    int offset = find_var(args[2]);
+    if (offset < 0) {
+        fprintf(stderr, "[ERROR] no variable %s\n", args[2]);
+        return -1;
+    }
+
+    char *endptr;
+    double value = strtod(args[3], &endptr);
+    if (*endptr)
+        return -1;
+    spoof_meta_array[offset].spoof_type = spoof_random;
+    spoof_meta_array[offset].value = value;
+    return 0;
+}
+
 static int clear_cmd (char **args) {
     if (!args[2])
         return -1;
@@ -336,6 +361,12 @@ void parse_cmd (char *cmd) {
         if (set_cmd(args)) {
             fprintf(stderr, "[ERROR] the format of command is wrong\n");
             fprintf(stderr, "    set <variable> <value>\n");
+        }
+    }
+    else if (!strcmp(args[1], "random")) {
+        if (random_cmd(args)) {
+            fprintf(stderr, "[ERROR] the format of command is wrong\n");
+            fprintf(stderr, "    random <variable> <value>\n");
         }
     }
     else if (!strcmp(args[1], "clear")) {
@@ -476,6 +507,8 @@ int main (int argc, char *argv[]) {
                 int type = spoof_meta_array[i].spoof_type;
                 if (type == spoof_set)
                     ptr[i] = spoof_meta_array[i].value;
+                if (type == spoof_random)
+                    ptr[i] = grandom(spoof_meta_array[i].value);
             }
 
             if (redirect_fd > 0)
