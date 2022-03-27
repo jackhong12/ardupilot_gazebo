@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <curses.h>
 
 #define LISTEN_GZSERVER_PORT 9006
 #define GZSERVER_PORT 9007
@@ -162,25 +163,40 @@ struct SpoofMeta spoof_meta_array[] = {
 };
 
 static void show_fdm (const struct fdmPacket *fdm, int fd) {
-    dprintf(fd, "timestamp: %f\n", fdm->timestamp);
-    dprintf(fd, "imuAngularVelocityRPY: %f, %f, %f\n",
+    static int firstTime = 1;
+    if (firstTime) {
+        firstTime = 0;
+        dprintf(fd, "\033[2J"); // clear screen
+        dprintf(fd, "\033[999A"); // move up 999 lines
+    }
+
+    dprintf(fd, "\033[7A"); // move up 7 lines
+
+    dprintf(fd, "%24s:    %12f\n",
+            "timestamp", fdm->timestamp);
+    dprintf(fd, "%24s:    %12f, %12f, %12f\n",
+            "imuAngularVelocityRPY",
             fdm->imuAngularVelocityRPY[0],
             fdm->imuAngularVelocityRPY[1],
             fdm->imuAngularVelocityRPY[2]);
-    dprintf(fd, "imuLinearAccelerationXYZ: %f, %f, %f\n",
+    dprintf(fd, "%24s:    %12f, %12f, %12f\n",
+            "imuLinearAccelerationXYZ",
             fdm->imuLinearAccelerationXYZ[0],
             fdm->imuLinearAccelerationXYZ[1],
             fdm->imuLinearAccelerationXYZ[2]);
-    dprintf(fd, "imuOrientationQuat: %f, %f, %f, %f\n",
+    dprintf(fd, "%24s:    %12f, %12f, %12f, %12f\n",
+            "imuOrientationQuat",
             fdm->imuOrientationQuat[0],
             fdm->imuOrientationQuat[1],
             fdm->imuOrientationQuat[2],
             fdm->imuOrientationQuat[3]);
-    dprintf(fd, "velocityXYZ: %f, %f, %f\n",
+    dprintf(fd, "%24s:    %12f, %12f, %12f\n",
+            "velocityXYZ",
             fdm->velocityXYZ[0],
             fdm->velocityXYZ[1],
             fdm->velocityXYZ[2]);
-    dprintf(fd, "positionXYZ: %f, %f, %f\n",
+    dprintf(fd, "%24s:    %12f, %12f, %12f\n",
+            "positionXYZ",
             fdm->positionXYZ[0],
             fdm->positionXYZ[1],
             fdm->positionXYZ[2]);
@@ -200,8 +216,10 @@ void sigint_handler (int signum) {
         close(listen_copter_fd);
     if (copter_fd > 0)
         close(copter_fd);
-    if (redirect_fd > 0)
+    if (redirect_fd > 0) {
+        dprintf(redirect_fd, "\033[2J"); // clear screen
         close(redirect_fd);
+    }
     exit(0);
 }
 
@@ -214,8 +232,10 @@ void normal_termination () {
         close(listen_copter_fd);
     if (copter_fd > 0)
         close(copter_fd);
-    if (redirect_fd > 0)
+    if (redirect_fd > 0) {
+        dprintf(redirect_fd, "\033[2J"); // clear screen
         close(redirect_fd);
+    }
 }
 
 static char **init_args (char *msg) {
