@@ -23,6 +23,12 @@
 #define get_spoof_array_size() \
     (sizeof(spoof_meta_array) / sizeof(struct SpoofMeta))
 
+#ifdef DEBUG
+#define debugp(msg, ...) printf(msg, ...)
+#else
+#define debugp(msg, ...)
+#endif
+
 const char *cmd_prefix = "> ";
 
 // A servo packet. for gazebo
@@ -446,7 +452,7 @@ int main (int argc, char *argv[]) {
         perror("failed to bind address");
         return -1;
     }
-    printf("create udp port at %d\n", LISTEN_GZSERVER_PORT);
+    debugp("create udp port at %d\n", LISTEN_GZSERVER_PORT);
 
     // create udp socket for listening copter messages
     if ((listen_copter_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -462,7 +468,7 @@ int main (int argc, char *argv[]) {
         perror("failed to bind address");
         return -1;
     }
-    printf("create udp port at %d\n", LISTEN_COPTER_PORT);
+    debugp("create udp port at %d\n", LISTEN_COPTER_PORT);
 
     // create fd to send message to gzserver
     if ((gzserver_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -473,7 +479,7 @@ int main (int argc, char *argv[]) {
     gzserver_addr.sin_family = AF_INET;
     gzserver_addr.sin_port = htons(GZSERVER_PORT); // big-endian
     gzserver_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    printf("create a fd for sending messge to prot %d\n", GZSERVER_PORT);
+    debugp("create a fd for sending messge to prot %d\n", GZSERVER_PORT);
 
     // create fd to send message to copter
     if ((copter_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -484,7 +490,7 @@ int main (int argc, char *argv[]) {
     copter_addr.sin_family = AF_INET;
     copter_addr.sin_port = htons(COPTER_PORT); // big-endian
     copter_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    printf("create a fd for sending messge to prot %d\n", COPTER_PORT);
+    debugp("create a fd for sending messge to prot %d\n", COPTER_PORT);
 
     struct fdmPacket fdm;
     struct ServoPacket sp = {0};
@@ -522,9 +528,9 @@ int main (int argc, char *argv[]) {
                 perror("failed to receive message from gzserver");
                 return -1;
             }
-            // TODO: spoof data
             int num = get_spoof_array_size();
             double *ptr = (double *)&fdm;
+            // spoof data
             for (int i = 0; i < num; i++) {
                 int type = spoof_meta_array[i].spoof_type;
                 if (type == spoof_set)
