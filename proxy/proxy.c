@@ -405,6 +405,53 @@ void parse_cmd (char *cmd) {
     return;
 }
 
+int gazebo_logger_fd = 1;
+void init_gazebo_logger () {
+    gazebo_logger_fd = open("gazebo_packet.txt", O_WRONLY | O_CREAT, 0644);
+    if (gazebo_logger_fd < 0) {
+        perror("failed to open gazebo_packet.txt\n");
+        exit(1);
+    }
+    dprintf(gazebo_logger_fd, "timestamp\t");
+    dprintf(gazebo_logger_fd, "imu_linear_acceleration_x\t"
+                              "imu_linear_acceleration_y\t"
+                              "imu_linear_acceleration_z\t");
+    dprintf(gazebo_logger_fd, "imu_angular_velocity_rpy_x\t"
+                              "imu_angular_velocity_rpy_y\t"
+                              "imu_angular_velocity_rpy_z\t");
+    dprintf(gazebo_logger_fd, "imu_orientation_quat_i\t"
+                              "imu_orientation_quat_j\t"
+                              "imu_orientation_quat_k\t"
+                              "imu_orientation_quat_v\t");
+    dprintf(gazebo_logger_fd, "velocity_x\tvelocity_y\tvelocity_z\t");
+    dprintf(gazebo_logger_fd, "position_x\tposition_y\tposition_z\t");
+}
+
+void log_gazebo_packet (struct fdmPacket *p) {
+    dprintf(gazebo_logger_fd, "%f\t", p->timestamp); 
+
+    dprintf(gazebo_logger_fd, "%f\t", p->imuLinearAccelerationXYZ[0]);
+    dprintf(gazebo_logger_fd, "%f\t", p->imuLinearAccelerationXYZ[1]);
+    dprintf(gazebo_logger_fd, "%f\t", p->imuLinearAccelerationXYZ[2]);
+
+    dprintf(gazebo_logger_fd, "%f\t", p->imuAngularVelocityRPY[0]);
+    dprintf(gazebo_logger_fd, "%f\t", p->imuAngularVelocityRPY[1]);
+    dprintf(gazebo_logger_fd, "%f\t", p->imuAngularVelocityRPY[2]);
+
+    dprintf(gazebo_logger_fd, "%f\t", p->imuOrientationQuat[0]);
+    dprintf(gazebo_logger_fd, "%f\t", p->imuOrientationQuat[1]);
+    dprintf(gazebo_logger_fd, "%f\t", p->imuOrientationQuat[2]);
+    dprintf(gazebo_logger_fd, "%f\t", p->imuOrientationQuat[3]);
+
+    dprintf(gazebo_logger_fd, "%f\t", p->velocityXYZ[0]);
+    dprintf(gazebo_logger_fd, "%f\t", p->velocityXYZ[1]);
+    dprintf(gazebo_logger_fd, "%f\t", p->velocityXYZ[2]);
+
+    dprintf(gazebo_logger_fd, "%f\t", p->positionXYZ[0]);
+    dprintf(gazebo_logger_fd, "%f\t", p->positionXYZ[1]);
+    dprintf(gazebo_logger_fd, "%f\n", p->positionXYZ[2]);
+}
+
 int main (int argc, char *argv[]) {
     for (int i = 0; i < argc; i++) {
         if (!strcmp(argv[i], "-tty") && i < argc - 1) {
@@ -495,6 +542,8 @@ int main (int argc, char *argv[]) {
     struct fdmPacket fdm;
     struct ServoPacket sp = {0};
 
+    init_gazebo_logger();
+
     // initialize select data
     int nfds = 0, ret;
     fd_set rfds, active_rfds;
@@ -528,6 +577,10 @@ int main (int argc, char *argv[]) {
                 perror("failed to receive message from gzserver");
                 return -1;
             }
+
+            // log packet
+            log_gazebo_packet(&fdm);
+
             int num = get_spoof_array_size();
             double *ptr = (double *)&fdm;
             // spoof data
