@@ -50,6 +50,7 @@
 #define MAX_MOTORS 255
 
 using namespace gazebo;
+bool isConnect = true;
 
 GZ_REGISTER_MODEL_PLUGIN(ArduPilotPlugin)
 
@@ -851,8 +852,13 @@ void ArduPilotPlugin::OnUpdate()
     this->ReceiveMotorCommand();
     if (this->dataPtr->arduPilotOnline)
     {
+      isConnect = true;
       this->ApplyMotorForces((curTime -
         this->dataPtr->lastControllerUpdateTime).Double());
+      this->SendState();
+    }
+    else {
+      isConnect = false;
       this->SendState();
     }
   }
@@ -1103,6 +1109,8 @@ void ArduPilotPlugin::ReceiveMotorCommand()
   }
 }
 
+#include <fstream>
+std::ofstream log_file("gazebo_data.txt");
 /////////////////////////////////////////////////
 void ArduPilotPlugin::SendState() const
 {
@@ -1151,8 +1159,7 @@ void ArduPilotPlugin::SendState() const
   // orientation of the uav in world NED frame -
   // assuming the world NED frame has xyz mapped to NED,
   // imuLink is NED - z down
-
-  // model world pose brings us to model,
+// model world pose brings us to model,
   // which for example zephyr has -y-forward, x-left, z-up
   // adding modelXYZToAirplaneXForwardZDown rotates
   //   from: model XYZ
@@ -1222,5 +1229,56 @@ void ArduPilotPlugin::SendState() const
   // airspeed :     wind = Vector3(environment.wind.x, environment.wind.y, environment.wind.z)
    // pkt.airspeed = (pkt.velocity - wind).length()
 */
-  this->dataPtr->socket_out.Send(&pkt, sizeof(pkt));
+  static bool isFirstTime = true;
+  if (isFirstTime) {
+    isFirstTime = false;
+    log_file << "timestamp\t";
+
+    log_file << "imu_linear_acceleration_x\t" 
+             << "imu_linear_acceleration_y\t"
+             << "imu_linear_acceleration_z\t";
+
+    log_file << "imu_angular_velocity_rpy_x\t" 
+             << "imu_angular_velocity_rpy_y\t" 
+             << "imu_angular_velocity_rpy_z\t";
+
+    log_file << "imu_orientation_quat_i\t" 
+             << "imu_orientation_quat_j\t" 
+             << "imu_orientation_quat_k\t" 
+             << "imu_orientation_quat_v\t";
+
+    log_file << "velocity_x\t"
+             << "velocity_y\t"
+             << "velocity_z\t";
+
+    log_file << "position_x\t"
+             << "position_y\t"
+             << "position_z\n";
+  }
+
+  log_file << pkt.timestamp << "\t";
+
+  log_file << pkt.imuLinearAccelerationXYZ[0] << "\t";
+  log_file << pkt.imuLinearAccelerationXYZ[1] << "\t";
+  log_file << pkt.imuLinearAccelerationXYZ[2] << "\t";
+
+  log_file << pkt.imuAngularVelocityRPY[0] << "\t";
+  log_file << pkt.imuAngularVelocityRPY[1] << "\t";
+  log_file << pkt.imuAngularVelocityRPY[2] << "\t";
+
+  log_file << pkt.imuOrientationQuat[0] << "\t";
+  log_file << pkt.imuOrientationQuat[1] << "\t";
+  log_file << pkt.imuOrientationQuat[2] << "\t";
+  log_file << pkt.imuOrientationQuat[3] << "\t";
+
+  log_file << pkt.velocityXYZ[0] << "\t";
+  log_file << pkt.velocityXYZ[1] << "\t";
+  log_file << pkt.velocityXYZ[2] << "\t";
+
+  log_file << pkt.positionXYZ[0] << "\t";
+  log_file << pkt.positionXYZ[1] << "\t";
+  log_file << pkt.positionXYZ[2] << "\n";
+
+  if (isConnect)
+    this->dataPtr->socket_out.Send(&pkt, sizeof(pkt));
 }
