@@ -841,20 +841,19 @@ void ArduPilotPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 void ArduPilotPlugin::OnUpdate()
 {
   std::lock_guard<std::mutex> lock(this->dataPtr->mutex);
+  const float rate = 1000;
+
+  static gazebo::common::Time syncTime =
+    this->dataPtr->model->GetWorld()->SimTime();
 
   const gazebo::common::Time curTime =
     this->dataPtr->model->GetWorld()->SimTime();
 
-  // Update the control surfaces and publish the new state.
-  if (curTime > this->dataPtr->lastControllerUpdateTime)
-  {
-    this->ReceiveMotorCommand();
-    if (this->dataPtr->arduPilotOnline)
-    {
-      this->ApplyMotorForces((curTime -
-        this->dataPtr->lastControllerUpdateTime).Double());
-      this->SendState();
-    }
+
+  if (this->ReceiveMotorCommand()) {
+    this->ApplyMotorForces(1 / rate);
+    this->SendState();
+    syncTime += 1 / rate;
   }
 
   this->dataPtr->lastControllerUpdateTime = curTime;
@@ -963,7 +962,7 @@ void ArduPilotPlugin::ApplyMotorForces(const double _dt)
 }
 
 /////////////////////////////////////////////////
-void ArduPilotPlugin::ReceiveMotorCommand()
+bool ArduPilotPlugin::ReceiveMotorCommand()
 {
   // Added detection for whether ArduPilot is online or not.
   // If ArduPilot is detected (receive of fdm packet from someone),
@@ -1016,24 +1015,7 @@ void ArduPilotPlugin::ReceiveMotorCommand()
   {
     // didn't receive a packet
     // gzdbg << "no packet\n";
-    gazebo::common::Time::NSleep(100);
-    if (this->dataPtr->arduPilotOnline)
-    {
-      gzwarn << "[" << this->dataPtr->modelName << "] "
-             << "Broken ArduPilot connection, count ["
-             << this->dataPtr->connectionTimeoutCount
-             << "/" << this->dataPtr->connectionTimeoutMaxCount
-             << "]\n";
-      if (++this->dataPtr->connectionTimeoutCount >
-        this->dataPtr->connectionTimeoutMaxCount)
-      {
-        this->dataPtr->connectionTimeoutCount = 0;
-        this->dataPtr->arduPilotOnline = false;
-        gzwarn << "[" << this->dataPtr->modelName << "] "
-               << "Broken ArduPilot connection, resetting motor control.\n";
-        this->ResetPIDs();
-      }
-    }
+    return false;
   }
   else
   {
@@ -1101,6 +1083,7 @@ void ArduPilotPlugin::ReceiveMotorCommand()
       }
     }
   }
+  return true;
 }
 
 /////////////////////////////////////////////////

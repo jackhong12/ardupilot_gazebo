@@ -75,7 +75,7 @@ namespace gazebo
     private: void ResetPIDs();
 
     /// \brief Receive motor commands from ArduPilot
-    private: void ReceiveMotorCommand();
+    private: bool ReceiveMotorCommand();
 
     /// \brief Send state to ArduPilot
     private: void SendState() const;
